@@ -1,99 +1,77 @@
-# --- BLOCK 1: Import e Definizioni ---
-import ipywidgets as widgets
-import bqplot as bq
+import streamlit as st
 import numpy as np
-import tempNcolor as tc  # Assumendo sia presente nell'ambiente
-import number_formatting as nf  # Assumendo sia presente nell'ambiente
-from IPython.display import display, clear_output
+import plotly.graph_objects as go
+import tempNcolor as tc  # Assicurati che il file sia nella stessa cartella
+import number_formatting as nf # Assicurati che il file sia nella stessa cartella
 
-# Costanti e Modello Stella Sequenza Principale [cite: 751, 912]
+# --- CONFIGURAZIONE PAGINA ---
+st.set_page_config(page_title="Laboratorio Stellare", layout="wide")
+st.title("🕵️‍♂️ L'Investigatore della Luce: Identikit Stellare")
+
+# --- MODELLO FISICO (Dati originali) ---
 Lvs_R_coeff = [-14.414732200764211, -13.259918928247322, 88.94347154444976, -24.088776726372608, 
                -87.71861646290176, 31.910048976800123, 30.045785739826723, -10.017454060166651, 
                -1.7461666512820873, 5.534581622863519, -0.06725347697088192]
 LogLum = np.poly1d(Lvs_R_coeff)
 
 def find_flux(l, r):
-    # Legge dell'inverso del quadrato [cite: 244, 257, 645]
     return l / (4 * np.pi * (r ** 2))
 
 def L_given_R(radius):
     logR = np.log10(radius)
     return 10**LogLum(logR)
 
-# --- BLOCK 2: Creazione Widget ---
-Dist_PC = widgets.FloatSlider(description='Distanza (pc):', min=1.0, max=10.0, step=0.1, value=1.0)
-Rad = widgets.FloatSlider(description='Raggio (R☉):', min=0.1, max=2.0, step=0.1, value=1.0)
+# --- SIDEBAR (Controlli) ---
+st.sidebar.header("Parametri di Osservazione")
+dist_pc = st.sidebar.slider("Distanza (pc)", 1.0, 10.0, 1.0, step=0.1)
+rad_solar = st.sidebar.slider("Raggio (R☉)", 0.1, 2.0, 1.0, step=0.1)
 
-Luminosity = widgets.Text(description='Luminosità (L☉):', disabled=True)
-Flux = widgets.Text(description='Flusso:', disabled=True)
+# --- CALCOLI ---
+lum = L_given_R(rad_solar)
+flux_val = find_flux(lum, dist_pc)
+temp = pow(lum/(rad_solar**2), 0.25) * 5777
+hexcolor = tc.rgb2hex(tc.temp2rgb(temp))[0]
 
-# Nuovo: Fotometro visivo
-Photometer = widgets.FloatProgress(value=0, min=0, max=1.0, description='Fotometro:', 
-                                   bar_style='info', orientation='horizontal')
+# --- LAYOUT VISUALE ---
+col1, col2 = st.columns(2)
 
-# Nuovo: Area Identikit
-out_identikit = widgets.Output()
-btn_identikit = widgets.Button(description="Genera Identikit Stellare", button_style='success')
+with col1:
+    st.subheader("Sorgente (Potenza Reale)")
+    fig_src = go.Figure(go.Scatter(x=[0], y=[0], mode='markers',
+                                   marker=dict(size=rad_solar*100, color=hexcolor, 
+                                               line=dict(width=2, color='white'))))
+    fig_src.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False), 
+                          template="plotly_dark", height=300, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_src, use_container_width=True)
+    st.metric("Luminosità", f"{lum:.3f} L☉")
 
-# --- BLOCK 3: Logica di Aggiornamento (W) ---
-def update_view(change=None):
-    d = Dist_PC.value
-    r = Rad.value
-    lum = L_given_R(r)
-    flux_val = find_flux(lum, d)
+with col2:
+    st.subheader("Telescopio (Flusso Ricevuto)")
+    # Effetto bagliore basato sul flusso
+    glow_size = int(20 + (flux_val * 200))
+    fig_tel = go.Figure(go.Scatter(x=[0], y=[0], mode='markers',
+                                   marker=dict(size=glow_size, color=hexcolor, 
+                                               opacity=min(0.2 + flux_val, 1.0))))
+    fig_tel.update_layout(xaxis=dict(visible=False), yaxis=dict(visible=False), 
+                          template="plotly_dark", height=300, margin=dict(l=20, r=20, t=20, b=20))
+    st.plotly_chart(fig_tel, use_container_width=True)
+    st.metric("Flusso misurato", f"{flux_val:.5f}")
+
+# --- FOTOMETRO ---
+st.write("### Fotometro")
+photo_val = min(flux_val * 10, 1.0)
+st.progress(photo_val)
+if photo_val > 0.8:
+    st.warning("⚠️ ATTENZIONE: Sensore in saturazione! La stella è troppo luminosa.")
+
+# --- IDENTIKIT ---
+st.divider()
+if st.button("🔍 Genera Identikit Stellare", type="primary"):
+    tipo = "O" if temp > 30000 else "B" if temp > 10000 else "A" if temp > 7500 else "F" if temp > 6000 else "G" if temp > 5200 else "K" if temp > 3700 else "M"
     
-    # Aggiorna Testi [cite: 353-359]
-    Luminosity.value = str(round(lum, 3))
-    Flux.value = str(round(flux_val, 5))
-    
-    # Aggiorna Fotometro e colore (Saturazione)
-    Photometer.value = min(flux_val * 10, 1.0)
-    Photometer.bar_style = 'danger' if Photometer.value > 0.8 else 'info'
-    
-    # Calcolo Temperatura e Colore [cite: 101, 645, 649]
-    Temp = pow(lum/(r*r), 0.25)*5777
-    hexcolor = tc.rgb2hex(tc.temp2rgb(Temp))[0]
-    
-    # Effetto GLOW: la dimensione cambia con il flusso ricevuto
-    star_earth.default_size = int(20 + (flux_val * 500)) 
-    star_earth.colors = [hexcolor]
-    star_earth.default_opacities = [min(0.2 + flux_val, 1.0)]
-    
-    # Stella reale (Luminosità intrinseca)
-    star.colors = [hexcolor]
-    star.default_size = int(r * 500)
-
-Dist_PC.observe(update_view, names='value')
-Rad.observe(update_view, names='value')
-
-# Azione Pulsante Identikit
-def on_button_clicked(b):
-    with out_identikit:
-        clear_output()
-        lum = float(Luminosity.value)
-        r = float(Rad.value)
-        temp = int(pow(lum/(r*r), 0.25)*5777)
-        # Classificazione approssimativa [cite: 756-779]
-        tipo = "O" if temp > 30000 else "B" if temp > 10000 else "A" if temp > 7500 else "F" if temp > 6000 else "G" if temp > 5200 else "K" if temp > 3700 else "M"
-        print(f"--- IDENTIKIT DELL'INVESTIGATORE ---")
-        print(f"Tipo Spettrale stimato: {tipo}")
-        print(f"Temperatura Superficiale: {temp} K")
-        print(f"Distanza: {Dist_PC.value} pc")
-        print(f"Nota: Questa stella emette {round(lum, 2)} volte l'energia del Sole.")
-
-btn_identikit.on_click(on_button_clicked)
-
-# --- BLOCK 4: Layout Grafico (bqplot) ---
-sc_x, sc_y = bq.LinearScale(), bq.LinearScale()
-star = bq.Scatter(x=[5], y=[5], scales={'x': sc_x, 'y': sc_y}, default_size=1000)
-star_earth = bq.Scatter(x=[5], y=[5], scales={'x': sc_x, 'y': sc_y}, default_size=20)
-
-fig_lum = bq.Figure(title='Sorgente (Potenza Reale)', marks=[star], background_style={'fill':'black'})
-fig_flux = bq.Figure(title='Telescopio (Flusso Ricevuto)', marks=[star_earth], background_style={'fill':'black'})
-
-# --- DISPLAY ---
-layout_controlli = widgets.VBox([Dist_PC, Rad, Luminosity, Flux, Photometer, btn_identikit])
-layout_visual = widgets.HBox([fig_lum, fig_flux])
-display(widgets.VBox([layout_visual, layout_controlli, out_identikit]))
-
-update_view() # Inizializzazione
+    st.success("### Risultati dell'Analisi")
+    c1, c2, c3 = st.columns(3)
+    c1.write(f"**Tipo Spettrale:** {tipo}")
+    c2.write(f"**Temperatura:** {int(temp)} K")
+    c3.write(f"**Distanza:** {dist_pc} pc")
+    st.info(f"Nota: Questa stella emette {lum:.2f} volte l'energia del Sole.")
