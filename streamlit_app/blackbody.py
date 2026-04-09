@@ -3,33 +3,22 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
-from scipy.signal import savgol_filter
-from scipy.optimize import curve_fit
 
-# --- COSTANTI FISICHE [cite: 1618, 1620, 1623] ---
+# --- COSTANTI FISICHE [cite: 395, 563] ---
 C, H, K_B = 3e8, 6.626e-34, 1.38e-23
 R_SUN, D_10PC = 6.957e8, 3.086e+17
 
-# --- FUNZIONI CORE ---
-def blackbody(lamda, T):
-    """Spettro di Planck [cite: 1618]"""
-    return np.array(((2 * H * (C ** 2)) / (lamda ** 5)) / (np.exp((H * C) / (lamda * K_B * T)) - 1), dtype=float)
-
-def wien_law(T):
-    """Legge di Wien [cite: 1628]"""
-    return 0.002897755 / T
-
+# --- FUNZIONE PER COLORE CONTINUO (Basata sulle Classi Spettrali [cite: 756-779]) ---
 def get_continuous_star_color(T):
-    """Colore stellare continuo basato sulla classe spettrale [cite: 1812-1813]"""
     points = [
-        (2000,  [255, 100, 0]),   # Rosso (M) [cite: 1834]
-        (3500,  [255, 160, 60]),  # Classe M [cite: 1834]
-        (5000,  [255, 210, 160]), # Classe K [cite: 1831]
-        (6000,  [255, 255, 240]), # Classe G (Sole ~5800K) [cite: 1158, 1828]
-        (7500,  [220, 230, 255]), # Classe F [cite: 1825]
-        (9500,  [180, 210, 255]), # Classe A [cite: 1822]
-        (15000, [150, 190, 255]), # Classe B [cite: 1819]
-        (35000, [130, 170, 255])  # Classe O [cite: 1816]
+        (2000,  [255, 100, 0]),   # Rosso profondo
+        (3500,  [255, 160, 60]),  # Classe M [cite: 777-778]
+        (5000,  [255, 210, 160]), # Classe K [cite: 774-775]
+        (6000,  [255, 255, 240]), # Classe G (Sole ~5770K) [cite: 101, 771-772]
+        (7500,  [220, 230, 255]), # Classe F [cite: 768-769]
+        (10000, [180, 210, 255]), # Classe A [cite: 765-766]
+        (20000, [150, 190, 255]), # Classe B [cite: 762-763]
+        (40000, [130, 170, 255])  # Classe O [cite: 759-760]
     ]
     temps = [p[0] for p in points]
     rgbs = np.array([p[1] for p in points])
@@ -38,12 +27,21 @@ def get_continuous_star_color(T):
     b = int(np.interp(T, temps, rgbs[:, 2]))
     return f'rgb({r},{g},{b})'
 
-# --- DATI FILTRI UBVRI COMPLETI  ---
-U_raw = {300:0.0, 305:0.016, 310:0.068, 315:0.167, 320:0.287, 330:0.56, 340:0.772, 350:0.905, 360:0.981, 370:1.0, 380:0.916, 390:0.625, 400:0.238, 410:0.051, 420:0.0}
-B_raw = {360:0.0, 370:0.03, 380:0.134, 390:0.567, 400:0.92, 410:0.978, 420:1.0, 430:0.978, 440:0.935, 450:0.853, 460:0.74, 480:0.536, 500:0.325, 520:0.15, 540:0.043, 560:0.0}
-V_raw = {470:0.0, 480:0.03, 490:0.163, 500:0.458, 510:0.78, 520:0.967, 530:1.0, 540:0.973, 550:0.898, 560:0.792, 580:0.574, 600:0.359, 620:0.197, 650:0.045, 700:0.0}
-R_raw = {550:0.0, 560:0.23, 570:0.74, 580:0.91, 590:0.98, 600:1.0, 620:0.96, 640:0.9, 660:0.81, 680:0.72, 700:0.61, 750:0.35, 800:0.14, 900:0.0}
-I_raw = {700:0.0, 720:0.232, 740:0.785, 760:0.965, 780:0.99, 800:1.0, 820:0.99, 840:0.95, 860:0.86, 880:0.56, 900:0.15, 920:0.0}
+# --- FUNZIONI SCIENTIFICHE [cite: 561, 571] ---
+def blackbody(lamda, T):
+    """Funzione di Planck [cite: 561]"""
+    return np.array(((2 * H * (C ** 2)) / (lamda ** 5)) / (np.exp((H * C) / (lamda * K_B * T)) - 1), dtype=float)
+
+def wien_law(T):
+    """Legge di Wien [cite: 571]"""
+    return 0.002897755 / T
+
+# --- DATI FILTRI UBVRI COMPLETI [cite: 664-683] ---
+U_raw = {300:0.0, 310:0.068, 340:0.772, 370:1.0, 400:0.238, 420:0.0}
+B_raw = {360:0.0, 390:0.567, 420:1.0, 500:0.325, 560:0.0}
+V_raw = {470:0.0, 500:0.458, 530:1.0, 600:0.359, 700:0.0}
+R_raw = {550:0.0, 600:1.0, 700:0.61, 800:0.14, 900:0.0}
+I_raw = {700:0.0, 750:0.91, 800:1.0, 850:0.91, 920:0.0}
 
 def get_filter_funcs():
     funcs = {}
@@ -76,10 +74,10 @@ with tab1:
         fig1 = go.Figure()
         fig1.add_trace(go.Scatter(x=lams*1e9, y=y_ref, name=star_choice, line=dict(color=get_continuous_star_color(t_ref), width=4)))
         fig1.add_trace(go.Scatter(x=lams*1e9, y=y_model, name="Modello", line=dict(color='#ff00ff', width=2, dash='dot')))
-        fig1.update_layout(xaxis_title="nm", yaxis_title="Intensità", yaxis=dict(range=[0, y_max]), template="plotly_dark")
+        fig1.update_layout(xaxis_title="nm", yaxis_title="Intensità", yaxis=dict(range=[0, y_max]), template="plotly_dark", plot_bgcolor='black', paper_bgcolor='black')
         st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: FOTOMETRIA E STELLA DINAMICA (VISIBILITÀ CORRETTA) ---
+# --- TAB 2: FOTOMETRIA E STELLA DINAMICA (SISTEMATO) ---
 with tab2:
     st.header("Fotometria UBVRI e Aspetto della Stella")
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -101,19 +99,34 @@ with tab2:
 
     with col2:
         fig2 = go.Figure()
-        # 1. Spettro di Corpo Nero Totale (sfondo BIANCO SOLIDO)
-        fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Spettro Continuo (Modello)", 
-                                  line=dict(color='white', width=3)))
+        # 1. Spettro Totale - Colore Grigio Chiaro per visibilità universale e sfondo Nero forzato
+        fig2.add_trace(go.Scatter(
+            x=lams_phot*1e9, 
+            y=bb_phot, 
+            name="Spettro Continuo", 
+            line=dict(color='#D3D3D3', width=2) # Grigio chiaro (Silver)
+        ))
         
-        # 2. Contributi filtrati
+        # 2. Contributi filtrati (Area colorata sotto la curva)
         colors_map = {'U': 'violet', 'B': 'blue', 'V': 'green', 'R': 'red', 'I': 'darkred'}
         for f_name, f_func in filter_funcs.items():
             f_flux = bb_phot * f_func(lams_phot)
-            fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=f_flux, name=f"Banda {f_name}", 
-                                      fill='tozeroy', line=dict(color=colors_map[f_name])))
+            fig2.add_trace(go.Scatter(
+                x=lams_phot*1e9, 
+                y=f_flux, 
+                name=f"Banda {f_name}", 
+                fill='tozeroy', 
+                line=dict(color=colors_map[f_name])
+            ))
             
-        fig2.update_layout(title="Spettro Completo vs Filtri UBVRI", xaxis_title="nm", 
-                           template="plotly_dark", height=450)
+        fig2.update_layout(
+            title="Spettro Completo vs Filtri UBVRI", 
+            xaxis_title="nm", 
+            template="plotly_dark", 
+            plot_bgcolor='black', # Sfondo grafico nero
+            paper_bgcolor='black', # Sfondo esterno nero
+            height=450
+        )
         st.plotly_chart(fig2, use_container_width=True)
 
     with col3:
@@ -121,9 +134,11 @@ with tab2:
         fig_star = go.Figure()
         fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=140, color=current_color, opacity=0.3)))
         fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=80, color=current_color, line=dict(width=3, color='white'))))
-        fig_star.update_layout(showlegend=False, plot_bgcolor='black', paper_bgcolor='black',
-                               xaxis=dict(visible=False, range=[-1,1]), yaxis=dict(visible=False, range=[-1,1]), 
-                               height=300, margin=dict(l=0,r=0,b=0,t=0))
+        fig_star.update_layout(
+            showlegend=False, plot_bgcolor='black', paper_bgcolor='black',
+            xaxis=dict(visible=False, range=[-1,1]), yaxis=dict(visible=False, range=[-1,1]), 
+            height=300, margin=dict(l=0,r=0,b=0,t=0)
+        )
         st.plotly_chart(fig_star, use_container_width=True)
         st.caption(f"Colore a {t_phot} K")
 
@@ -133,6 +148,6 @@ with tab3:
     try:
         spec_data = pd.read_csv('data/spec_data_use.csv')
         star_name = st.selectbox("Seleziona stella:", spec_data['Name'].unique())
-        st.success(f"Analisi pronta per {star_name}.")
+        st.success(f"Dati caricati per {star_name}.")
     except:
-        st.warning("Carica il file CSV nella cartella 'data' per attivare questa sezione.")
+        st.warning("Carica il file 'data/spec_data_use.csv' per visualizzare gli spettri osservativi.")
