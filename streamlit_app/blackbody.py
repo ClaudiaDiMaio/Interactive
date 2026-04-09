@@ -124,53 +124,76 @@ with tab1:
         )
         st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: FILTRI E INDICI DI COLORE ---
+# --- TAB 2: FILTRI E INDICI DI COLORE (CON STELLA VISUALE) ---
 with tab2:
-    st.header("Fotometria a Banda Larga (Johnson-Cousins)")
-    col1, col2 = st.columns([1, 3])
+    st.header("Fotometria e Aspetto della Stella")
+    col1, col2, col3 = st.columns([1, 2, 1]) # Tre colonne per bilanciare i controlli, il grafico e la stella
     
     with col1:
         t_phot = st.slider("Temperatura Stella (K)", 2800, 35000, 5800, step=500, key="t_phot")
         st.write("---")
-        st.write("**Indici di Colore calcolati:**")
+        st.write("**Indici di Colore:**")
         
         lams_phot = np.linspace(300e-9, 1000e-9, 1000)
         bb_phot = blackbody(lams_phot, t_phot)
         filter_funcs = get_filter_funcs()
         
         mags = {}
-        # Funzione di integrazione compatibile con NumPy 1.x e 2.x
         integrate = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
 
         for f_name, f_func in filter_funcs.items():
-            # Calcolo del flusso integrato attraverso il filtro
             flux_val = integrate(bb_phot * f_func(lams_phot), lams_phot)
-            
-            # Costanti di calibrazione approssimative
             calib = {'U': 28.01-6.33, 'B': 27.30-5.31, 'V': 27.34-4.80, 'R': 26.87-4.60, 'I': 27.24-4.51}
-            
-            # Evitiamo logaritmi di zero o numeri negativi
             if flux_val > 0:
                 mags[f_name] = -2.5 * np.log10(flux_val * (R_SUN/D_10PC)**2) - calib[f_name]
             else:
                 mags[f_name] = np.nan
             
         if not np.isnan(mags['B']) and not np.isnan(mags['V']):
-            st.info(f"B-V: {mags['B'] - mags['V']:.2f}")
-        if not np.isnan(mags['U']) and not np.isnan(mags['B']):
-            st.info(f"U-B: {mags['U'] - mags['B']:.2f}")
+            st.metric("Indice B-V", f"{mags['B'] - mags['V']:.2f}")
+        
+        # Calcolo del colore per la stella visuale
+        try:
+            star_hex = tc.rgb2hex(tc.temp2rgb(t_phot))[0]
+        except:
+            star_hex = "#FFFFFF"
 
     with col2:
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Corpo Nero", line=dict(color='orange')))
+        # Grafico dei filtri UBVRI
+        fig_filters = go.Figure()
+        fig_filters.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Corpo Nero", line=dict(color='orange', dash='dash')))
         
         colors = {'U': 'violet', 'B': 'blue', 'V': 'green', 'R': 'red', 'I': 'darkred'}
         for f_name, f_func in filter_funcs.items():
             f_flux = bb_phot * f_func(lams_phot)
-            fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=f_flux, name=f"Filtro {f_name}", fill='tozeroy', line=dict(color=colors[f_name])))
+            fig_filters.add_trace(go.Scatter(x=lams_phot*1e9, y=f_flux, name=f"Filtro {f_name}", fill='tozeroy', line=dict(color=colors[f_name])))
             
-        fig2.update_layout(title="Distribuzione di energia nei filtri UBVRI", template="plotly_dark", height=500)
-        st.plotly_chart(fig2, use_container_width=True)
+        fig_filters.update_layout(title="Luce filtrata (UBVRI)", template="plotly_dark", height=450, margin=dict(l=0,r=0,b=0,t=40))
+        st.plotly_chart(fig_filters, use_container_width=True)
+
+    with col3:
+        # Visualizzazione della Stella (come nel tuo fig3)
+        st.write("**Aspetto della Stella**")
+        fig_star = go.Figure()
+        
+        # Aggiungiamo un effetto "glow" con due cerchi sovrapposti
+        fig_star.add_trace(go.Scatter(
+            x=[0], y=[0], mode='markers',
+            marker=dict(size=120, color=star_hex, opacity=0.3) # Alone esterno
+        ))
+        fig_star.add_trace(go.Scatter(
+            x=[0], y=[0], mode='markers',
+            marker=dict(size=80, color=star_hex, line=dict(width=2, color='white')) # Nucleo stella
+        ))
+        
+        fig_star.update_layout(
+            showlegend=False, plot_bgcolor='black', paper_bgcolor='black',
+            xaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1, 1]),
+            yaxis=dict(showgrid=False, zeroline=False, showticklabels=False, range=[-1, 1]),
+            height=300, margin=dict(l=0,r=0,b=0,t=0)
+        )
+        st.plotly_chart(fig_star, use_container_width=True)
+        st.caption(f"Colore percepito a {t_phot}K")
 
 # --- TAB 3: SPECTRAL FITTING (DATI REALI) ---
 with tab3:
