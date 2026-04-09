@@ -106,20 +106,31 @@ with tab2:
         st.write("---")
         st.write("**Indici di Colore calcolati:**")
         
-        # Logica semplificata per calcolare magnitudini relative
         lams_phot = np.linspace(300e-9, 1000e-9, 1000)
         bb_phot = blackbody(lams_phot, t_phot)
         filter_funcs = get_filter_funcs()
         
         mags = {}
+        # Funzione di integrazione compatibile con NumPy 1.x e 2.x
+        integrate = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+
         for f_name, f_func in filter_funcs.items():
-            flux = np.trapz(bb_phot * f_func(lams_phot), lams_phot)
-            # Costanti di calibrazione approssimative dal tuo codice
-            calib = {'U': 28.01-6.33, 'B': 27.30-5.31, 'V': 27.34-4.80, 'R': 26.87-4.60, 'I': 27.24-4.51}
-            mags[f_name] = -2.5 * np.log10(flux * (R_SUN/D_10PC)**2) - calib[f_name]
+            # Calcolo del flusso integrato attraverso il filtro
+            flux_val = integrate(bb_phot * f_func(lams_phot), lams_phot)
             
-        st.info(f"B-V: {mags['B'] - mags['V']:.2f}")
-        st.info(f"U-B: {mags['U'] - mags['B']:.2f}")
+            # Costanti di calibrazione approssimative
+            calib = {'U': 28.01-6.33, 'B': 27.30-5.31, 'V': 27.34-4.80, 'R': 26.87-4.60, 'I': 27.24-4.51}
+            
+            # Evitiamo logaritmi di zero o numeri negativi
+            if flux_val > 0:
+                mags[f_name] = -2.5 * np.log10(flux_val * (R_SUN/D_10PC)**2) - calib[f_name]
+            else:
+                mags[f_name] = np.nan
+            
+        if not np.isnan(mags['B']) and not np.isnan(mags['V']):
+            st.info(f"B-V: {mags['B'] - mags['V']:.2f}")
+        if not np.isnan(mags['U']) and not np.isnan(mags['B']):
+            st.info(f"U-B: {mags['U'] - mags['B']:.2f}")
 
     with col2:
         fig2 = go.Figure()
