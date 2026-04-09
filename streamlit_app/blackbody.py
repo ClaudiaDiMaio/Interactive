@@ -12,30 +12,22 @@ R_SUN, D_10PC = 6.957e8, 3.086e+17
 
 # --- FUNZIONE PER COLORE CONTINUO (BLACKBODY RGB) ---
 def get_continuous_star_color(T):
-    """
-    Restituisce un colore Hex fluido basato sulla temperatura.
-    Utilizza una mappatura semplificata delle classi spettrali [cite: 756-779].
-    """
-    # Tabella di riferimento: Temp (K) -> [R, G, B] (0-255)
+    # Mappatura classi spettrali [cite: 756-779]
     points = [
         (2000,  [255, 100, 0]),   # Rosso profondo
         (3500,  [255, 160, 60]),  # Classe M [cite: 777-778]
         (5000,  [255, 210, 160]), # Classe K [cite: 774-775]
-        (6000,  [255, 255, 240]), # Classe G (Sole ~5770K) 
+        (6000,  [255, 255, 240]), # Classe G (Sole ~5770K) [cite: 101, 771-772]
         (7500,  [220, 230, 255]), # Classe F [cite: 768-769]
         (10000, [180, 210, 255]), # Classe A [cite: 765-766]
         (20000, [150, 190, 255]), # Classe B [cite: 762-763]
         (40000, [130, 170, 255])  # Classe O [cite: 759-760]
     ]
-    
     temps = [p[0] for p in points]
     rgbs = np.array([p[1] for p in points])
-    
-    # Interpolazione per ogni canale
     r = int(np.interp(T, temps, rgbs[:, 0]))
     g = int(np.interp(T, temps, rgbs[:, 1]))
     b = int(np.interp(T, temps, rgbs[:, 2]))
-    
     return f'rgb({r},{g},{b})'
 
 # --- FUNZIONI SCIENTIFICHE ---
@@ -45,13 +37,13 @@ def blackbody(lamda, T):
 def wien_law(T):
     return 0.002897755 / T
 
-# --- DATI FILTRI UBVRI ---
+# --- DATI FILTRI UBVRI (Interpolazione Lineare per evitare errori) ---
 filters_data = {
-    'U': {300:0.0, 310:0.068, 370:1.0, 420:0.0},
-    'B': {360:0.0, 420:1.0, 560:0.0},
-    'V': {470:0.0, 530:1.0, 700:0.0},
-    'R': {550:0.0, 600:1.0, 900:0.0},
-    'I': {700:0.0, 800:1.0, 920:0.0}
+    'U': {300:0.0, 310:0.06, 370:1.0, 410:0.05, 420:0.0},
+    'B': {360:0.0, 420:1.0, 500:0.3, 560:0.0},
+    'V': {470:0.0, 530:1.0, 650:0.1, 700:0.0},
+    'R': {550:0.0, 600:1.0, 800:0.1, 900:0.0},
+    'I': {700:0.0, 800:1.0, 910:0.03, 920:0.0}
 }
 
 def get_filter_funcs():
@@ -59,7 +51,8 @@ def get_filter_funcs():
     for f_name, data in filters_data.items():
         w_m = np.array(list(data.keys())) * 1e-9
         trans = np.array(list(data.values()))
-        funcs[f_name] = interp1d(w_m, trans, kind='cubic', bounds_error=False, fill_value=0)
+        # Cambiato da 'cubic' a 'linear' per stabilità
+        funcs[f_name] = interp1d(w_m, trans, kind='linear', bounds_error=False, fill_value=0)
     return funcs
 
 # --- INTERFACCIA STREAMLIT ---
@@ -68,49 +61,36 @@ st.title("🔭 Laboratorio di Astrofisica: Spettri e Colori")
 
 tab1, tab2, tab3 = st.tabs(["Confronto Stelle Note", "Fotometria UBVRI", "Analisi Dati Reali"])
 
-# --- TAB 1: CONFRONTO MODELLI ---
+# --- TAB 1 ---
 with tab1:
     st.header("Analisi Comparativa: Modello vs Stelle Note")
-    known_stars = {
-        'Proxima Centauri': 3300, 
-        'Il Sole': 5800, 
-        'Polaris': 7200, 
-        'Alpha Andromedae': 13000, 
-        'Bellatrix': 22000
-    }
-    
+    known_stars = {'Proxima Centauri': 3300, 'Il Sole': 5800, 'Polaris': 7200, 'Alpha Andromedae': 13000, 'Bellatrix': 22000}
     col1, col2 = st.columns([1, 3])
     with col1:
         star_choice = st.radio("Seleziona una stella nota:", list(known_stars.keys()), index=1)
         t_ref = known_stars[star_choice]
-        t_model = st.slider("Temperatura Modello (K)", 2000, 40000, 5000, step=100, key="t1")
-        
+        t_model = st.slider("Temperatura Modello (K)", 2000, 40000, 5000, step=100)
         color_ref = get_continuous_star_color(t_ref)
         color_model = get_continuous_star_color(t_model)
         st.write(f"λ_max Modello: {wien_law(t_model)*1e9:.1f} nm")
-
     with col2:
         lams = np.linspace(50e-9, 2500e-9, 1000)
         y_ref, y_model = blackbody(lams, t_ref), blackbody(lams, t_model)
         y_max = 1.1 * max(np.max(y_ref), np.max(y_model))
-        
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_ref, name=f"{star_choice}", line=dict(color=color_ref, width=4)))
+        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_ref, name=star_choice, line=dict(color=color_ref, width=4)))
         fig1.add_trace(go.Scatter(x=lams*1e9, y=y_model, name="Modello", line=dict(color='#ff00ff', width=2, dash='dot')))
         fig1.update_layout(xaxis_title="nm", yaxis_title="Intensità", yaxis=dict(range=[0, y_max]), template="plotly_dark")
         st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: FOTOMETRIA E STELLA DINAMICA ---
+# --- TAB 2 ---
 with tab2:
     st.header("Fotometria e Aspetto della Stella")
     col1, col2, col3 = st.columns([1, 2, 1])
-    
     with col1:
         t_phot = st.slider("Temperatura Stella (K)", 2000, 40000, 5800, step=100, key="t2")
         lams_phot = np.linspace(300e-9, 1200e-9, 1000)
         bb_phot = blackbody(lams_phot, t_phot)
-        
-        # Calcolo Indici di Colore
         filter_funcs = get_filter_funcs()
         integrate = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
         mags = {}
@@ -118,11 +98,9 @@ with tab2:
             flux_val = integrate(bb_phot * f_func(lams_phot), lams_phot)
             calib = {'U': 21.68, 'B': 21.99, 'V': 22.54, 'R': 22.27, 'I': 22.73}
             mags[f_name] = -2.5 * np.log10(flux_val) + calib[f_name] if flux_val > 0 else 0
-        
-        st.metric("Indice B-V", f"{mags['B'] - mags['V']:.2f}")
-        # Colore calcolato con precisione millimetrica
-        current_color_hex = get_continuous_star_color(t_phot)
-
+        if 'B' in mags and 'V' in mags:
+            st.metric("Indice B-V", f"{mags['B'] - mags['V']:.2f}")
+        current_color = get_continuous_star_color(t_phot)
     with col2:
         fig2 = go.Figure()
         colors_map = {'U': 'violet', 'B': 'blue', 'V': 'green', 'R': 'red', 'I': 'darkred'}
@@ -130,28 +108,21 @@ with tab2:
             fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot*f_func(lams_phot), name=f_name, fill='tozeroy', line=dict(color=colors_map[f_name])))
         fig2.update_layout(title="Energia nei filtri", template="plotly_dark", height=400)
         st.plotly_chart(fig2, use_container_width=True)
-
     with col3:
         st.write("**Aspetto della Stella**")
         fig_star = go.Figure()
-        # Effetto Bagliore Reattivo
-        fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=140, color=current_color_hex, opacity=0.3)))
-        fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=80, color=current_color_hex, line=dict(width=3, color='white'))))
-        
-        fig_star.update_layout(
-            showlegend=False, plot_bgcolor='black', paper_bgcolor='black',
-            xaxis=dict(visible=False, range=[-1,1]), yaxis=dict(visible=False, range=[-1,1]), 
-            height=300, margin=dict(l=0,r=0,b=0,t=0)
-        )
+        fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=140, color=current_color, opacity=0.3)))
+        fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=80, color=current_color, line=dict(width=3, color='white'))))
+        fig_star.update_layout(showlegend=False, plot_bgcolor='black', paper_bgcolor='black',
+                               xaxis=dict(visible=False, range=[-1,1]), yaxis=dict(visible=False, range=[-1,1]), height=300, margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig_star, use_container_width=True)
-        st.caption(f"Colore a {t_phot} K")
 
-# --- TAB 3: DATI REALI ---
+# --- TAB 3 ---
 with tab3:
     st.header("Analisi Dati Reali")
     try:
         spec_data = pd.read_csv('data/spec_data_use.csv')
         star_name = st.selectbox("Seleziona stella:", spec_data['Name'].unique())
-        st.success(f"Dati caricati per {star_name}.")
+        st.success(f"Dati per {star_name} pronti per l'analisi.")
     except:
-        st.warning("Carica 'data/spec_data_use.csv' per sbloccare questa sezione.")
+        st.warning("Carica il file CSV nella cartella 'data' per questa sezione.")
