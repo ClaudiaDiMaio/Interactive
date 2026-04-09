@@ -1,4 +1,6 @@
 streamlit
 numpy
 plotly
+pandas
+scipy
 # aggiornamento 2026
