@@ -14,99 +14,163 @@ R_SUN = 6.957e8
 D_10PC = 3.086e+17
 
 # --- FUNZIONI CORE ---
-def wien_law(t):
-    """Calcola la lunghezza d'onda di picco (metri)"""
-    return 0.002897755 / t
+def blackbody(lamda, T):
+    """Calcola lo spettro di Planck (W/m^3)"""
+    return np.array(((2 * H * (C ** 2)) / (lamda ** 5)) / (np.exp((H * C) / (lamda * K * T)) - 1), dtype=float)
 
-def planck_law(lam, t):
-    """Calcola l'intensità della radiazione di corpo nero"""
-    return ((2 * H * (C ** 2)) / (lam ** 5)) / (np.exp((H * C) / (lam * K * t)) - 1)
+def wien_law(T):
+    """Calcola la lunghezza d'onda di picco in metri"""
+    return 0.002897755 / T
 
-# --- DATI FILTRI UBVRI (Johnson-Cousins) ---
-# Dati estratti dal tuo codice per interpolazione
+# Funzione per mappare Raggio -> Luminosità (Sequenza Principale) dal tuo codice
+def get_l_given_r(radius):
+    coeffs = [-14.414732200764211, -13.259918928247322, 88.94347154444976, -24.088776726372608, 
+              -87.71861646290176, 31.910048976800123, 30.045785739826723, -10.017454060166651, 
+              -1.7461666512820873, 5.534581622863519, -0.06725347697088192]
+    log_lum_poly = np.poly1d(coeffs)
+    logR = np.log10(radius)
+    return 10**log_lum_poly(logR)
+
+# --- FOTOMETRIA UBVRI ---
 filters_data = {
-    'U': {300:0.0, 330:0.56, 370:1.0, 400:0.23, 420:0.0},
-    'B': {360:0.0, 400:0.92, 420:1.0, 500:0.32, 560:0.0},
-    'V': {470:0.0, 520:0.96, 530:1.0, 600:0.35, 700:0.0},
+    'U': {300:0.0, 310:0.068, 340:0.772, 370:1.0, 400:0.238, 420:0.0},
+    'B': {360:0.0, 390:0.567, 420:1.0, 500:0.325, 560:0.0},
+    'V': {470:0.0, 500:0.458, 530:1.0, 600:0.359, 700:0.0},
     'R': {550:0.0, 600:1.0, 700:0.61, 800:0.14, 900:0.0},
-    'I': {700:0.0, 800:1.0, 850:0.91, 900:0.15, 920:0.0}
+    'I': {700:0.0, 750:0.91, 800:1.0, 850:0.91, 920:0.0}
 }
 
 def get_filter_funcs():
     funcs = {}
     for f_name, data in filters_data.items():
-        w_nm = np.array(list(data.keys()))
+        w_m = np.array(list(data.keys())) * 1e-9
         trans = np.array(list(data.values()))
-        funcs[f_name] = interp1d(w_nm * 1e-9, trans, kind='cubic', bounds_error=False, fill_value=0)
+        funcs[f_name] = interp1d(w_m, trans, kind='cubic', bounds_error=False, fill_value=0)
     return funcs
 
 # --- INTERFACCIA STREAMLIT ---
 st.set_page_config(page_title="Investigatore della Luce - Lab", layout="wide")
-st.title("🔭 Laboratorio di Astrofisica: Spettri e Colori")
+st.title("🔭 Laboratorio di Astrofisica: Spettri, Filtri e Fitting")
 
-tab1, tab2, tab3 = st.tabs(["Corpo Nero & Wien", "Filtri & Indice di Colore", "Analisi Dati Reali"])
+tab1, tab2, tab3 = st.tabs(["Confronto Stelle Note", "Fotometria UBVRI", "Analisi Dati Reali"])
 
-# --- TAB 1: MODELLO TEORICO & WIEN ---
+# --- TAB 1: CONFRONTO CON MODELLI NOTI ---
 with tab1:
-    st.header("Modello di Corpo Nero")
+    st.header("Analisi Comparativa: Modello vs Stelle Note")
+    st.write("Sposta lo slider della temperatura per far combaciare il modello (fucsia) con lo spettro della stella selezionata.")
+    
+    known_stars = {
+        'Proxima Centauri': 3300,
+        'Il Sole': 5800,
+        'Polaris': 7200,
+        'Alpha Andromedae': 13000,
+        'Eta Ursae Majoris': 16900,
+        'Bellatrix': 22000
+    }
+    
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        temp = st.slider("Temperatura Stella (K)", 2800, 35000, 5800, step=100, key="t1")
-        peak_w = wien_law(temp)
-        st.metric("Lunghezza d'onda di picco ($λ_{max}$)", f"{peak_w*1e9:.2f} nm")
-        st.write("Secondo la Legge di Wien, all'aumentare della temperatura il picco si sposta verso il blu[cite: 571, 588].")
+        star_choice = st.radio("Seleziona una stella nota:", list(known_stars.keys()), index=1)
+        t_ref = known_stars[star_choice]
+        t_model = st.slider("Temperatura Modello (K)", 2000, 35000, 5000, step=100)
+        
+        pw = wien_law(t_model)
+        st.metric("Lunghezza d'onda di picco (Modello)", f"{pw*1e9:.2f} nm")
 
     with col2:
-        lams = np.linspace(1e-9, 2000e-9, 500)
-        flux = planck_law(lams, temp)
+        lams = np.linspace(100e-9, 2000e-9, 1000)
+        y_ref = blackbody(lams, t_ref)
+        y_model = blackbody(lams, t_model)
+        
+        y_max = 1.1 * max(np.max(y_ref), np.max(y_model))
         
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=lams*1e9, y=flux, name="Corpo Nero", line=dict(color='orange')))
-        # Area del visibile
-        fig1.add_vrect(x0=400, x1=700, fillcolor="rgba(0, 255, 0, 0.1)", layer="below", line_width=0, annotation_text="Visibile")
-        fig1.update_layout(title=f"Spettro a {temp}K", xaxis_title="Wavelength (nm)", yaxis_title="Intensità", template="plotly_dark")
+        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_ref, name=f"{star_choice} ({t_ref}K)", line=dict(color='white', width=3)))
+        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_model, name="Modello Interattivo", line=dict(color='#ff00ff', dash='dot')))
+        
+        fig1.update_layout(
+            title=f"Spettro: {star_choice} vs Modello",
+            xaxis_title="Lunghezza d'onda (nm)", yaxis_title="Intensità",
+            yaxis=dict(range=[0, y_max]), template="plotly_dark", height=500
+        )
         st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: FILTRI UBVRI ---
+# --- TAB 2: FILTRI E INDICI DI COLORE ---
 with tab2:
-    st.header("Fotometria e Filtri")
+    st.header("Fotometria a Banda Larga (Johnson-Cousins)")
     col1, col2 = st.columns([1, 3])
     
-    filter_funcs = get_filter_funcs()
-    
     with col1:
-        temp2 = st.slider("Temperatura Stella (K)", 2800, 35000, 5800, step=100, key="t2")
-        st.info("I filtri selezionano solo una parte dello spettro per calcolare la magnitudine[cite: 652, 691].")
+        t_phot = st.slider("Temperatura Stella (K)", 2800, 35000, 5800, step=500, key="t_phot")
+        st.write("---")
+        st.write("**Indici di Colore calcolati:**")
         
+        # Logica semplificata per calcolare magnitudini relative
+        lams_phot = np.linspace(300e-9, 1000e-9, 1000)
+        bb_phot = blackbody(lams_phot, t_phot)
+        filter_funcs = get_filter_funcs()
+        
+        mags = {}
+        for f_name, f_func in filter_funcs.items():
+            flux = np.trapz(bb_phot * f_func(lams_phot), lams_phot)
+            # Costanti di calibrazione approssimative dal tuo codice
+            calib = {'U': 28.01-6.33, 'B': 27.30-5.31, 'V': 27.34-4.80, 'R': 26.87-4.60, 'I': 27.24-4.51}
+            mags[f_name] = -2.5 * np.log10(flux * (R_SUN/D_10PC)**2) - calib[f_name]
+            
+        st.info(f"B-V: {mags['B'] - mags['V']:.2f}")
+        st.info(f"U-B: {mags['U'] - mags['B']:.2f}")
+
     with col2:
-        lams2 = np.linspace(300e-9, 1000e-9, 500)
-        bb_flux = planck_law(lams2, temp2)
-        
         fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=lams2*1e9, y=bb_flux, name="Blackbody", line=dict(color='white', dash='dash')))
+        fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Corpo Nero", line=dict(color='orange')))
         
         colors = {'U': 'violet', 'B': 'blue', 'V': 'green', 'R': 'red', 'I': 'darkred'}
         for f_name, f_func in filter_funcs.items():
-            f_flux = bb_flux * f_func(lams2)
-            fig2.add_trace(go.Scatter(x=lams2*1e9, y=f_flux, name=f"Filtro {f_name}", fill='tozeroy', line=dict(color=colors[f_name])))
+            f_flux = bb_phot * f_func(lams_phot)
+            fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=f_flux, name=f"Filtro {f_name}", fill='tozeroy', line=dict(color=colors[f_name])))
             
-        fig2.update_layout(title="Luce che attraversa i filtri UBVRI", template="plotly_dark")
+        fig2.update_layout(title="Distribuzione di energia nei filtri UBVRI", template="plotly_dark", height=500)
         st.plotly_chart(fig2, use_container_width=True)
 
-# --- TAB 3: DATI REALI (SPECTRAL FITTING) ---
+# --- TAB 3: SPECTRAL FITTING (DATI REALI) ---
 with tab3:
-    st.header("Analisi degli Spettri Stellari")
+    st.header("Fitting di Spettri Osservativi")
     
-    # Tentativo di caricamento dati (usa un placeholder se il file non c'è)
     try:
         spec_data = pd.read_csv('data/spec_data_use.csv')
-        star_choice = st.selectbox("Seleziona una stella dai dati osservativi:", spec_data['Name'].unique())
+        star_name = st.selectbox("Seleziona una stella dal catalogo:", spec_data['Name'].unique())
         
-        # Simulazione del fitting (Logica EstTempAndRescale del tuo codice)
-        st.success(f"Dati caricati per {star_choice}. Qui l'app confronta lo spettro reale con il modello teorico[cite: 739, 961].")
-        st.warning("Nota: Per il fitting interattivo completo è necessario il file CSV originale.")
+        idx = spec_data[spec_data['Name'] == star_name].index[0]
+        wl_real = np.array(spec_data['Wavelengths'][idx].split(':')).astype(float)
+        flux_real = np.array(spec_data['Fluxes'][idx].split(':')).astype(float)
         
-    except:
-        st.error("File 'data/spec_data_use.csv' non trovato. Carica il file nella cartella corretta.")
-        st.image("https://upload.wikimedia.org/wikipedia/commons/thumb/c/c3/Solar_spectrum_en.svg/800px-Solar_spectrum_en.svg.png", caption="Esempio di spettro solare con righe di assorbimento[cite: 741].")
+        show_fit = st.toggle("Mostra Fitting di Planck stimato")
+        
+        # Fitting (Logica EstTempAndRescale)
+        def fit_func(lam, A, T):
+            return A * blackbody(lam, T)
+
+        # Stima iniziale
+        lamb_max = wl_real[flux_real.argmax()]
+        t_init = 0.002897755 / lamb_max
+        a_init = flux_real.max() / blackbody(np.array([lamb_max]), t_init)[0]
+
+        popt, _ = curve_fit(fit_func, wl_real, flux_real, p0=(a_init, t_init))
+        best_a, best_t = popt
+        
+        fig3 = go.Figure()
+        fig3.add_trace(go.Scatter(x=wl_real*1e9, y=flux_real / best_a, name="Dati Reali (Rescaled)", line=dict(color='cyan')))
+        
+        if show_fit:
+            y_fit = blackbody(wl_real, best_t)
+            fig3.add_trace(go.Scatter(x=wl_real*1e9, y=y_fit, name=f"Fit di Planck ({int(best_t)}K)", line=dict(color='orange', width=4)))
+            st.success(f"Temperatura stimata per {star_name}: **{int(best_t)} K**")
+
+        fig3.update_layout(xaxis_title="Lunghezza d'onda (nm)", yaxis_title="Intensità Normalizzata", template="plotly_dark")
+        st.plotly_chart(fig3, use_container_width=True)
+        
+    except FileNotFoundError:
+        st.error("Per questa Tab è necessario il file 'data/spec_data_use.csv'.")
+    except Exception as e:
+        st.error(f"Errore nel caricamento dati: {e}")
