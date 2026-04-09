@@ -3,22 +3,33 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from scipy.interpolate import interp1d
+from scipy.signal import savgol_filter
+from scipy.optimize import curve_fit
 
-# --- COSTANTI FISICHE ---
+# --- COSTANTI FISICHE [cite: 1618, 1620, 1623] ---
 C, H, K_B = 3e8, 6.626e-34, 1.38e-23
 R_SUN, D_10PC = 6.957e8, 3.086e+17
 
-# --- FUNZIONE PER COLORE CONTINUO (Basata su classi spettrali) ---
+# --- FUNZIONI CORE ---
+def blackbody(lamda, T):
+    """Spettro di Planck [cite: 1618]"""
+    return np.array(((2 * H * (C ** 2)) / (lamda ** 5)) / (np.exp((H * C) / (lamda * K_B * T)) - 1), dtype=float)
+
+def wien_law(T):
+    """Legge di Wien [cite: 1628]"""
+    return 0.002897755 / T
+
 def get_continuous_star_color(T):
+    """Colore stellare continuo basato sulla classe spettrale [cite: 1812-1813]"""
     points = [
-        (2000,  [255, 100, 0]),   # Rosso profondo
-        (3000,  [255, 160, 60]),  # Classe M
-        (4500,  [255, 210, 160]), # Classe K
-        (5500,  [255, 255, 240]), # Classe G (Sole ~5770K)
-        (7000,  [220, 230, 255]), # Classe F
-        (9000,  [180, 210, 255]), # Classe A
-        (15000, [150, 190, 255]), # Classe B
-        (30000, [130, 170, 255])  # Classe O
+        (2000,  [255, 100, 0]),   # Rosso (M) [cite: 1834]
+        (3500,  [255, 160, 60]),  # Classe M [cite: 1834]
+        (5000,  [255, 210, 160]), # Classe K [cite: 1831]
+        (6000,  [255, 255, 240]), # Classe G (Sole ~5800K) [cite: 1158, 1828]
+        (7500,  [220, 230, 255]), # Classe F [cite: 1825]
+        (9500,  [180, 210, 255]), # Classe A [cite: 1822]
+        (15000, [150, 190, 255]), # Classe B [cite: 1819]
+        (35000, [130, 170, 255])  # Classe O [cite: 1816]
     ]
     temps = [p[0] for p in points]
     rgbs = np.array([p[1] for p in points])
@@ -27,19 +38,12 @@ def get_continuous_star_color(T):
     b = int(np.interp(T, temps, rgbs[:, 2]))
     return f'rgb({r},{g},{b})'
 
-# --- FUNZIONI SCIENTIFICHE ---
-def blackbody(lamda, T):
-    return np.array(((2 * H * (C ** 2)) / (lamda ** 5)) / (np.exp((H * C) / (lamda * K_B * T)) - 1), dtype=float)
-
-def wien_law(T):
-    return 0.002897755 / T
-
-# --- DATI FILTRI UBVRI COMPLETI (Ripristinati dal tuo codice originale) ---
-U_raw = {300:0.0, 305:0.016, 310:0.068, 315:0.167, 320:0.287, 325:0.423, 330:0.56, 335:0.673, 340:0.772, 345:0.841, 350:0.905, 355:0.943, 360:0.981, 365:0.993, 370:1.0, 375:0.989, 380:0.916, 385:0.804, 390:0.625, 395:0.423, 400:0.238, 405:0.114, 410:0.051, 415:0.019, 420:0.0}
-B_raw = {360:0.0, 370:0.03, 380:0.134, 390:0.567, 400:0.92, 410:0.978, 420:1.0, 430:0.978, 440:0.935, 450:0.853, 460:0.74, 470:0.64, 480:0.536, 490:0.424, 500:0.325, 510:0.235, 520:0.15, 530:0.095, 540:0.043, 550:0.009, 560:0.0}
-V_raw = {470:0.0, 480:0.03, 490:0.163, 500:0.458, 510:0.78, 520:0.967, 530:1.0, 540:0.973, 550:0.898, 560:0.792, 570:0.684, 580:0.574, 590:0.461, 600:0.359, 610:0.27, 620:0.197, 630:0.135, 640:0.081, 650:0.045, 660:0.025, 670:0.017, 680:0.013, 690:0.009, 700:0.0}
-R_raw = {550:0.0, 560:0.23, 570:0.74, 580:0.91, 590:0.98, 600:1.0, 610:0.98, 620:0.96, 630:0.93, 640:0.9, 650:0.86, 660:0.81, 670:0.78, 680:0.72, 690:0.67, 700:0.61, 710:0.56, 720:0.51, 730:0.46, 740:0.4, 750:0.35, 800:0.14, 850:0.03, 900:0.0}
-I_raw = {700:0.0, 710:0.024, 720:0.232, 730:0.555, 740:0.785, 750:0.91, 760:0.965, 770:0.985, 780:0.99, 790:0.995, 800:1.0, 810:1.0, 820:0.99, 830:0.98, 840:0.95, 850:0.91, 860:0.86, 870:0.75, 880:0.56, 890:0.33, 900:0.15, 910:0.03, 920:0.0}
+# --- DATI FILTRI UBVRI COMPLETI  ---
+U_raw = {300:0.0, 305:0.016, 310:0.068, 315:0.167, 320:0.287, 330:0.56, 340:0.772, 350:0.905, 360:0.981, 370:1.0, 380:0.916, 390:0.625, 400:0.238, 410:0.051, 420:0.0}
+B_raw = {360:0.0, 370:0.03, 380:0.134, 390:0.567, 400:0.92, 410:0.978, 420:1.0, 430:0.978, 440:0.935, 450:0.853, 460:0.74, 480:0.536, 500:0.325, 520:0.15, 540:0.043, 560:0.0}
+V_raw = {470:0.0, 480:0.03, 490:0.163, 500:0.458, 510:0.78, 520:0.967, 530:1.0, 540:0.973, 550:0.898, 560:0.792, 580:0.574, 600:0.359, 620:0.197, 650:0.045, 700:0.0}
+R_raw = {550:0.0, 560:0.23, 570:0.74, 580:0.91, 590:0.98, 600:1.0, 620:0.96, 640:0.9, 660:0.81, 680:0.72, 700:0.61, 750:0.35, 800:0.14, 900:0.0}
+I_raw = {700:0.0, 720:0.232, 740:0.785, 760:0.965, 780:0.99, 800:1.0, 820:0.99, 840:0.95, 860:0.86, 880:0.56, 900:0.15, 920:0.0}
 
 def get_filter_funcs():
     funcs = {}
@@ -56,16 +60,15 @@ st.title("🔭 Laboratorio di Astrofisica: Spettri e Colori")
 
 tab1, tab2, tab3 = st.tabs(["Confronto Stelle Note", "Fotometria UBVRI", "Analisi Dati Reali"])
 
-# --- TAB 1: CONFRONTO ---
+# --- TAB 1: CONFRONTO MODELLI ---
 with tab1:
     st.header("Analisi Comparativa: Modello vs Stelle Note")
     known_stars = {'Proxima Centauri': 3300, 'Il Sole': 5800, 'Polaris': 7200, 'Alpha Andromedae': 13000, 'Bellatrix': 22000}
     col1, col2 = st.columns([1, 3])
     with col1:
-        star_choice = st.radio("Seleziona stella nota:", list(known_stars.keys()), index=1)
+        star_choice = st.radio("Seleziona stella reale:", list(known_stars.keys()), index=1)
         t_ref = known_stars[star_choice]
         t_model = st.slider("Temperatura Modello (K)", 2000, 40000, 5000, step=100, key="t1_s")
-        st.write(f"λ_max: {wien_law(t_model)*1e9:.1f} nm")
     with col2:
         lams = np.linspace(50e-9, 2500e-9, 1000)
         y_ref, y_model = blackbody(lams, t_ref), blackbody(lams, t_model)
@@ -76,9 +79,9 @@ with tab1:
         fig1.update_layout(xaxis_title="nm", yaxis_title="Intensità", yaxis=dict(range=[0, y_max]), template="plotly_dark")
         st.plotly_chart(fig1, use_container_width=True)
 
-# --- TAB 2: FOTOMETRIA E STELLA DINAMICA (Sistemato) ---
+# --- TAB 2: FOTOMETRIA E STELLA DINAMICA (VISIBILITÀ CORRETTA) ---
 with tab2:
-    st.header("Fotometria e Aspetto della Stella")
+    st.header("Fotometria UBVRI e Aspetto della Stella")
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col1:
@@ -98,11 +101,11 @@ with tab2:
 
     with col2:
         fig2 = go.Figure()
-        # 1. Tracciamo prima il corpo nero TOTALE (linea di sfondo)
-        fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Corpo Nero (Totale)", 
-                                  line=dict(color='rgba(255,255,255,0.2)', width=2, dash='dash')))
+        # 1. Spettro di Corpo Nero Totale (sfondo BIANCO SOLIDO)
+        fig2.add_trace(go.Scatter(x=lams_phot*1e9, y=bb_phot, name="Spettro Continuo (Modello)", 
+                                  line=dict(color='white', width=3)))
         
-        # 2. Tracciamo i contributi filtrati
+        # 2. Contributi filtrati
         colors_map = {'U': 'violet', 'B': 'blue', 'V': 'green', 'R': 'red', 'I': 'darkred'}
         for f_name, f_func in filter_funcs.items():
             f_flux = bb_phot * f_func(lams_phot)
@@ -110,11 +113,11 @@ with tab2:
                                       fill='tozeroy', line=dict(color=colors_map[f_name])))
             
         fig2.update_layout(title="Spettro Completo vs Filtri UBVRI", xaxis_title="nm", 
-                           template="plotly_dark", height=450, margin=dict(l=0,r=0,b=0,t=40))
+                           template="plotly_dark", height=450)
         st.plotly_chart(fig2, use_container_width=True)
 
     with col3:
-        st.write("**Aspetto della Stella**")
+        st.write("**Aspetto Visivo**")
         fig_star = go.Figure()
         fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=140, color=current_color, opacity=0.3)))
         fig_star.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=80, color=current_color, line=dict(width=3, color='white'))))
@@ -122,7 +125,7 @@ with tab2:
                                xaxis=dict(visible=False, range=[-1,1]), yaxis=dict(visible=False, range=[-1,1]), 
                                height=300, margin=dict(l=0,r=0,b=0,t=0))
         st.plotly_chart(fig_star, use_container_width=True)
-        st.caption(f"Colore percepito a {t_phot} K")
+        st.caption(f"Colore a {t_phot} K")
 
 # --- TAB 3: DATI REALI ---
 with tab3:
@@ -130,6 +133,6 @@ with tab3:
     try:
         spec_data = pd.read_csv('data/spec_data_use.csv')
         star_name = st.selectbox("Seleziona stella:", spec_data['Name'].unique())
-        st.success(f"Dati caricati per {star_name}.")
+        st.success(f"Analisi pronta per {star_name}.")
     except:
-        st.warning("Carica il file 'data/spec_data_use.csv' per visualizzare gli spettri osservativi.")
+        st.warning("Carica il file CSV nella cartella 'data' per attivare questa sezione.")
