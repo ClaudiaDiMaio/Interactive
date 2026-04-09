@@ -54,10 +54,10 @@ st.title("🔭 Laboratorio di Astrofisica: Spettri, Filtri e Fitting")
 
 tab1, tab2, tab3 = st.tabs(["Confronto Stelle Note", "Fotometria UBVRI", "Analisi Dati Reali"])
 
-# --- TAB 1: CONFRONTO CON MODELLI NOTI ---
+# --- TAB 1: CONFRONTO CON MODELLI NOTI (CORRETTO) ---
 with tab1:
     st.header("Analisi Comparativa: Modello vs Stelle Note")
-    st.write("Sposta lo slider della temperatura per far combaciare il modello (fucsia) con lo spettro della stella selezionata.")
+    st.write("Cerca di far coincidere la curva tratteggiata (Modello) con quella della stella reale.")
     
     known_stars = {
         'Proxima Centauri': 3300,
@@ -73,26 +73,54 @@ with tab1:
     with col1:
         star_choice = st.radio("Seleziona una stella nota:", list(known_stars.keys()), index=1)
         t_ref = known_stars[star_choice]
+        
+        # Slider per il Modello (fucsia nel tuo codice originale)
         t_model = st.slider("Temperatura Modello (K)", 2000, 35000, 5000, step=100)
         
-        pw = wien_law(t_model)
-        st.metric("Lunghezza d'onda di picco (Modello)", f"{pw*1e9:.2f} nm")
+        # Calcolo Lunghezza d'onda di picco secondo Wien
+        pw_model = wien_law(t_model)
+        st.metric("λ_max (Modello)", f"{pw_model*1e9:.2f} nm")
+        
+        # Ricaviamo il colore della stella reale usando il tuo modulo tempNcolor
+        try:
+            real_star_hex = tc.rgb2hex(tc.temp2rgb(t_ref))[0]
+        except:
+            real_star_hex = "#FFFF00" # Giallo di fallback se tc non è caricato
 
     with col2:
-        lams = np.linspace(100e-9, 2000e-9, 1000)
+        # Range di lunghezze d'onda (da 1nm a 2000nm come nel tuo array originale)
+        lams = np.linspace(1e-9, 2000e-9, 1000)
         y_ref = blackbody(lams, t_ref)
         y_model = blackbody(lams, t_model)
         
+        # Calcolo dinamico dell'asse Y per vedere entrambi i picchi (logica cr nel tuo codice)
         y_max = 1.1 * max(np.max(y_ref), np.max(y_model))
         
         fig1 = go.Figure()
-        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_ref, name=f"{star_choice} ({t_ref}K)", line=dict(color='white', width=3)))
-        fig1.add_trace(go.Scatter(x=lams*1e9, y=y_model, name="Modello Interattivo", line=dict(color='#ff00ff', dash='dot')))
+        
+        # Traccia della Stella Reale (con colore fisico)
+        fig1.add_trace(go.Scatter(
+            x=lams * 1e9, 
+            y=y_ref, 
+            name=f"{star_choice} ({t_ref}K)", 
+            line=dict(color=real_star_hex, width=4)
+        ))
+        
+        # Traccia del Modello Interattivo (Fucsia come nel tuo bqplot)
+        fig1.add_trace(go.Scatter(
+            x=lams * 1e9, 
+            y=y_model, 
+            name="Modello Interattivo", 
+            line=dict(color='#ff00ff', width=2, dash='dot')
+        ))
         
         fig1.update_layout(
             title=f"Spettro: {star_choice} vs Modello",
-            xaxis_title="Lunghezza d'onda (nm)", yaxis_title="Intensità",
-            yaxis=dict(range=[0, y_max]), template="plotly_dark", height=500
+            xaxis_title="Lunghezza d'onda (nm)",
+            yaxis_title="Intensità (W/m³)",
+            yaxis=dict(range=[0, y_max]),
+            template="plotly_dark", # Sfondo scuro per far risaltare i colori delle stelle
+            height=500
         )
         st.plotly_chart(fig1, use_container_width=True)
 
