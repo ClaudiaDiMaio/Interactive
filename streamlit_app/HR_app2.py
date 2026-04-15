@@ -65,7 +65,7 @@ if hip_df is not None:
                                   marker=dict(size=3, color='lightgray', opacity=0.4), name='Stelle'))
         fig1.add_trace(go.Scatter(x=z_bv, y=z_lum, mode='lines+markers',
                                 line=dict(color='cyan', width=3), name='Modello'))
-        fig1.update_layout(yaxis_type="log", template="plotly_dark", height=450, xaxis_title="B-V", yaxis_title="L")
+        fig1.update_layout(yaxis_type="log", template="plotly_dark", height=450, xaxis_title="Colore(B-V)", yaxis_title="Luminosità (L☉)")
         st.plotly_chart(fig1, use_container_width=True)
 
     with c2:
@@ -76,7 +76,7 @@ if hip_df is not None:
                                   marker=dict(size=4, color='orange'), name='Ammasso'))
         fig2.add_trace(go.Scatter(x=z_bv, y=z_app, mode='lines',
                                 line=dict(color='cyan', width=3, dash='dash'), name='Fit'))
-        fig2.update_layout(yaxis_type="log", template="plotly_dark", height=450, xaxis_title="B-V", yaxis_title="b")
+        fig2.update_layout(yaxis_type="log", template="plotly_dark", height=450, xaxis_title="Colore(B-V)", yaxis_title="b")
         st.plotly_chart(fig2, use_container_width=True)
 
     st.info(f"📏 Distanza calcolata: **{int(d_pc)} pc**")
