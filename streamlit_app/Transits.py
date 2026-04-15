@@ -99,7 +99,7 @@ with col_right:
     st.header("3. Tabella Dati")
     st.markdown("""
     **Formule utili:**
-    * **Raggio del Pianeta** $= 10 \times \sqrt{Z}$ 
+    * **Raggio del Pianeta** $= 10 x \sqrt{Z}$ 
     *(dove Z è il calo di luminosità espresso in numero positivo)*
     """)
     
