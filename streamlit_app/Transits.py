@@ -20,7 +20,7 @@ PLANET_DATA = {
 
 # --- FUNZIONI DI SUPPORTO ---
 def generate_lightcurve(period, depth, duration=26):
-    """Genera una curva di luce sintetica a puntini"""
+    """Genera una curva di luce sintetica"""
     time = np.linspace(0, duration, 2000)
     # Rumore di fondo (0.0 è la luminosità normale della stella)
     flux = np.random.normal(0, 0.08, len(time)) 
@@ -60,19 +60,19 @@ with col_left:
     
     fig_lc = go.Figure()
     
-    # MODIFICA QUI: Usiamo 'markers' per i puntini, impostando una dimensione piccola (size=3)
+    # Grafico con LINEA E PUNTINI
     fig_lc.add_trace(go.Scattergl(
         x=t, 
         y=f, 
-        mode='markers', 
-        marker=dict(color='#1f77b4', size=3, opacity=0.7)
+        mode='lines+markers', 
+        line=dict(color='rgba(31, 119, 180, 0.4)', width=1), 
+        marker=dict(color='#1f77b4', size=4, opacity=0.9)
     ))
     
     fig_lc.update_layout(
         title=f"Curva di Luce: {selected_planet}",
         xaxis_title="Time in Days",
         yaxis_title="Change in Brightness (%)",
-        # Rimosso 'autorange="reversed"'. Ora lo zero è in alto e il calo va in basso fisiologicamente.
         height=400,
         margin=dict(l=0, r=0, t=40, b=0)
     )
