@@ -96,13 +96,13 @@ with col_left:
     st.plotly_chart(fig_kep, use_container_width=True)
 
 with col_right:
-        st.header("3. Tabella Dati")
-        # Aggiungiamo la 'r' prima delle virgolette per attivare la "raw string"
-        st.markdown(r"""
-            **Formule utili:**
-            * **Raggio del Pianeta** $= 10 \times \sqrt{Z}$ 
-            *(dove Z è il calo di luminosità espresso in numero positivo)*
-            """)
+    st.header("3. Tabella Dati")
+    # Aggiungiamo la 'r' prima delle virgolette per attivare la "raw string"
+    st.markdown(r"""
+    **Formule utili:**
+    * **Raggio del Pianeta** $= 10 \times \sqrt{Z}$ 
+    *(dove Z è il calo di luminosità espresso in numero positivo)*
+    """)
     
     if 'student_data' not in st.session_state:
         df_empty = pd.DataFrame(
