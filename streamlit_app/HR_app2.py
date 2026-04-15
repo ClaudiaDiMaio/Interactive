@@ -62,7 +62,7 @@ if hip_df is not None:
         st.subheader("1. Modello Teorico")
         fig1 = go.Figure()
         fig1.add_trace(go.Scattergl(x=hip_df['B-V'], y=hip_df['Lum'], mode='markers',
-                                  marker=dict(size=3, color='gray', opacity=0.9), name='Stelle'))
+                                  marker=dict(size=3, color='gray', opacity=0.8), name='Stelle'))
         fig1.add_trace(go.Scatter(x=z_bv, y=z_lum, mode='lines+markers',
                                 line=dict(color='cyan', width=3), name='Modello'))
         fig1.update_layout(yaxis_type="log", template="plotly_dark", height=450, xaxis_title="B-V", yaxis_title="L")
