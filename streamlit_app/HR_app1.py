@@ -10,16 +10,22 @@ st.set_page_config(page_title="Stellar Catalog Lab", layout="wide")
 @st.cache_data
 def load_data():
     # Caricamento dati (assicurati che la cartella 'data' sia presente nel tuo repo)
-    df = pd.read_csv('data/Hipparcos.csv')
-    # Pre-calcolo colori basati su B-V
-    df['hex_color'] = t2c.rgb2hex(t2c.bv2rgb(df['B-V']))
-    return df
+    try:
+        # Nota: Ho aggiunto l'handling degli errori direttamente qui per sicurezza
+        df = pd.read_csv('data/Hipparcos.csv')
+        # Pre-calcolo colori basati su B-V
+        df['hex_color'] = t2c.rgb2hex(t2c.bv2rgb(df['B-V']))
+        return df
+    except FileNotFoundError:
+        st.error("❌ Errore: Non trovo il file 'data/Hipparcos.csv'. Controlla il percorso.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Errore nel caricamento dati o calcolo colori: {e}")
+        st.stop()
 
-try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Errore nel caricamento dati: {e}")
-    st.stop()
+# Tentativo di caricamento
+df = load_data()
+
 
 # --- SIDEBAR: CONTROLLI ---
 st.sidebar.header("🕹️ Filtri Investigativi")
@@ -37,18 +43,25 @@ dist_range = st.sidebar.slider(
 # --- LOGICA DI EVIDENZIAZIONE ---
 # Definiamo le opacità e le dimensioni basandoci sulla selezione
 if dist_toggle:
+    # Modalità Investigativa: forte contrasto tra selezione e resto
     mask = (df['distance'] >= dist_range[0]) & (df['distance'] <= dist_range[1])
+    # Stelle selezionate: grandi e opache. Altre: minuscole e quasi trasparenti.
     df['size'] = np.where(mask, 15, 2)
     df['opacity'] = np.where(mask, 1.0, 0.1)
 else:
-    df['size'] = 3
-    df['opacity'] = 0.6
+    # --- MODIFICA QUI ---
+    # Modalità Normale: aumentiamo visibilità di base
+    # Size 3 -> 5
+    # Opacity 0.6 -> 0.9
+    df['size'] = 5        
+    df['opacity'] = 0.9  
+    # --------------------
 
 # --- FUNZIONE PER CREARE I GRAFICI ---
 def create_star_chart(y_axis, title, y_label):
     fig = go.Figure()
     
-    # Aggiungiamo le stelle
+    # Aggiungiamo le stelle utilizzando Scattergl per performance
     fig.add_trace(go.Scattergl(
         x=df['B-V'],
         y=df[y_axis],
@@ -57,7 +70,7 @@ def create_star_chart(y_axis, title, y_label):
             size=df['size'],
             color=df['hex_color'],
             opacity=df['opacity'],
-            line=dict(width=0)
+            line=dict(width=0) # Rimuoviamo il bordo per pulizia
         ),
         text=df['HIP'], # Mostra ID Hipparcos all'hover
         hovertemplate="HIP: %{text}<br>B-V: %{x}<br>Valore: %{y}<extra></extra>"
@@ -67,9 +80,9 @@ def create_star_chart(y_axis, title, y_label):
         title=title,
         xaxis_title="Colore (B-V)",
         yaxis_title=y_label,
-        yaxis_type="log", # Scala logaritmica come nel codice originale
+        yaxis_type="log", # Scala logaritmica obbligatoria per Luminosità
         template="plotly_dark",
-        height=500,
+        height=600, # Aumentato leggermente l'altezza
         margin=dict(l=20, r=20, t=40, b=20),
         xaxis=dict(range=[-0.5, 2.5])
     )
@@ -95,4 +108,4 @@ with col2:
 # --- AREA DI ANALISI ---
 if dist_toggle:
     st.info(f"✨ Stai evidenziando le stelle tra **{dist_range[0]}** e **{dist_range[1]}** parsec.")
-    st.write("Nota come nel grafico di destra le stelle selezionate formino una linea netta, mentre a sinistra sono sparse su tutta la Sequenza Principale.")
+    st.write("Nota come nel grafico di destra (Brillantezza) le stelle selezionate formino una linea netta, poiché sono tutte alla stessa distanza. Nel grafico di sinistra (Luminosità), invece, sono sparse su tutta la Sequenza Principale.")
