@@ -8,14 +8,14 @@ st.set_page_config(page_title="Laboratorio Transiti Esopianeti", layout="wide")
 
 # --- DATI SIMULATI DEI PIANETI ---
 PLANET_DATA = {
-    "Kepler-1b": {"period": 2.47, "depth": 1.6},
-    "Kepler-2b": {"period": 2.20, "depth": 0.7},
-    "Kepler-3b": {"period": 4.88, "depth": 0.4},
-    "Kepler-4b": {"period": 3.21, "depth": 0.09},
-    "Kepler-5b": {"period": 3.55, "depth": 0.75},
-    "Kepler-6b": {"period": 3.23, "depth": 1.0},
-    "Kepler-7b": {"period": 4.88, "depth": 0.7},
-    "Kepler-8b": {"period": 3.52, "depth": 0.9}
+    "Kepler-1b": {"period": 2.47, "depth": 1.85},
+    "Kepler-2b": {"period": 2.20, "depth": 2.35},
+    "Kepler-3b": {"period": 4.88, "depth": 0.225},
+    "Kepler-4b": {"period": 3.21, "depth": 0.16},
+    "Kepler-5b": {"period": 3.55, "depth": 2.4},
+    "Kepler-6b": {"period": 3.23, "depth": 2.25},
+    "Kepler-7b": {"period": 4.88, "depth": 2.55},
+    "Kepler-8b": {"period": 3.52, "depth": 2.3}
 }
 
 # --- FUNZIONI DI SUPPORTO ---
