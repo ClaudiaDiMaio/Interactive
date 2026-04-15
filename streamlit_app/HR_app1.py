@@ -46,8 +46,8 @@ if dist_toggle:
     # Modalità Investigativa: forte contrasto tra selezione e resto
     mask = (df['distance'] >= dist_range[0]) & (df['distance'] <= dist_range[1])
     # Stelle selezionate: grandi e opache. Altre: minuscole e quasi trasparenti.
-    df['size'] = np.where(mask, 15, 2)
-    df['opacity'] = np.where(mask, 1.0, 0.1)
+    df['size'] = np.where(mask, 10, 4)
+    df['opacity'] = np.where(mask, 1.0, 0.6)
 else:
     # --- MODIFICA QUI ---
     # Modalità Normale: aumentiamo visibilità di base
