@@ -114,4 +114,16 @@ with col_right:
     edited_df = st.data_editor(st.session_state.student_data, use_container_width=True, height=350)
     
     st.header("4. Domande Finali")
-    q1 = st.
+    q1 = st.text_input("1. Quale/i pianeta/i hanno una dimensione simile alla Terra?")
+    q2 = st.text_input("2. Quali pianeti hanno una dimensione simile a quella di Giove?")
+    q3 = st.text_area("3. Descrivi la relazione tra il periodo dei pianeti e le loro distanze orbitali.")
+
+    with st.expander("Mostra Soluzioni (Modalità Docente)"):
+        st.write("Valori teorici attesi (approssimativi):")
+        sol_df = pd.DataFrame(index=list(PLANET_DATA.keys()), columns=["Period (Days)", "Orbital Dist.", "Drop of Z (%)", "Radius (Earth Radii)"])
+        for p, d in PLANET_DATA.items():
+            sol_df.loc[p, "Period (Days)"] = d["period"]
+            sol_df.loc[p, "Drop of Z (%)"] = d["depth"]
+            sol_df.loc[p, "Orbital Dist."] = round(get_kepler_distance(d["period"]), 2)
+            sol_df.loc[p, "Radius (Earth Radii)"] = round(10 * np.sqrt(d["depth"]), 1)
+        st.dataframe(sol_df, use_container_width=True)
